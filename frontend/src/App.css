@@ -1,0 +1,52 @@
+.App {
+  text-align: center;
+  font-family: sans-serif;
+}
+
+.App nav {
+  background-color: #282c34;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.App nav a {
+  color: white;
+  margin: 0 15px;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.App nav a:hover {
+  text-decoration: underline;
+}
+
+div {
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  margin: 1rem auto;
+  max-width: 600px;
+}
+
+input[type="text"] {
+  padding: 8px;
+  margin-right: 10px;
+  width: 300px;
+}
+
+button {
+  padding: 8px 15px;
+  cursor: pointer;
+  background-color: #61dafb;
+  border: none;
+  border-radius: 4px;
+  margin: 5px;
+}
+
+button:hover {
+  background-color: #21a1f1;
+}
+
+p {
+  word-wrap: break-word;
+}
