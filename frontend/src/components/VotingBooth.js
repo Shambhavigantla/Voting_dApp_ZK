@@ -10,7 +10,7 @@ const VotingBooth = () => {
     const fetchCandidatesAndResults = useCallback(async () => {
         if (contract) {
             try {
-                const candidateList = await contract.methods.candidates().call();
+                const candidateList = await contract.methods.getCandidates().call(); // Changed this line
                 setCandidates(candidateList);
 
                 const resultsData = {};

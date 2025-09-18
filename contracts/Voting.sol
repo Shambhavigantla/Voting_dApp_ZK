@@ -21,6 +21,10 @@ contract Voting {
         _;
     }
 
+    function getCandidates() public view returns (string[] memory) {
+        return candidates;
+    }
+
     function registerVoter(address _voterAddress) public onlyOwner {
         require(!registeredVoters[_voterAddress], "Voter is already registered.");
         registeredVoters[_voterAddress] = true;
