@@ -13,6 +13,7 @@ This simplified version serves as the foundation for a more advanced system. Fut
 - **Transparent Results**: Vote counts are stored publicly on the blockchain and can be viewed by anyone in real-time.
 - **Fraud Prevention**: The smart contract ensures that only registered addresses can vote, and each can only vote once.
 
+
 ## Project Structure
 ```
 voting-dapp-prototype/
