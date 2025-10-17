@@ -1,6 +1,6 @@
 # Blockchain Voting Application - Prototype
 
-## Still working on it. Open for collaboration.
+## Still working on it. I just wanted to let you know that open for collaboration.
 
 ## Overview
 This project is a functional prototype of a secure, transparent electronic voting system built on the Ethereum blockchain. It demonstrates the core mechanics of a decentralized application (dApp) for voting, including admin-based voter registration, on-chain vote casting, and real-time result tallying.
