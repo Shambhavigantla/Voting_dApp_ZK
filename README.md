@@ -1,4 +1,4 @@
-# VoteChain - A Blockchain based Voting Platform
+# Blockchain Voting Application - Prototype
 
 ## Overview
 VoteChain is a secure, transparent, and user-friendly electronic voting platform built on the Ethereum blockchain. Designed for college and community elections (e.g., class representatives, club leadership), it provides a trustworthy alternative to traditional polling methods.
@@ -6,14 +6,10 @@ VoteChain is a secure, transparent, and user-friendly electronic voting platform
 This prototype leverages a React frontend for a modern user experience and a Solidity smart contract for backend logic, ensuring that all votes are recorded on an immutable ledger. It demonstrates the core mechanics of a decentralized application (dApp), including role-based access (admin/voter), on-chain vote casting, and real-time, transparent result tallying.
 
 ## Features
-- **Modern User Interface**: A clean, professional, and responsive UI inspired by modern web applications.
-- **Role-Based Dashboards**: Separate, intuitive interfaces for Election Administrators and Voters.
-- **Admin-Controlled Registration**: A contract owner can securely register eligible voter addresses via an admin dashboard.
-- **Live Voter Roll**: The admin dashboard displays a real-time list of all registered voters.
-- **On-Chain Voting**: Registered voters can cast a single, secure vote for their chosen candidate.
-- **Transparent & Real-Time Results**: Vote counts are tallied on the blockchain and displayed with live-updating progress bars for all to see.
-- **User-Friendly Error Handling**: Displays clear, understandable error messages from the smart contract (e.g., "You have already voted.") instead of generic JSON errors.
-- **Built-in Guide**: A "How to Use" page to guide new users through the process of setting up MetaMask and participating in an election.
+- **Admin-Controlled Registration**: A contract owner can register eligible voter addresses.
+- **On-Chain Voting**: Registered voters can cast a single vote for a candidate.
+- **Transparent Results**: Vote counts are stored publicly on the blockchain and can be viewed by anyone in real-time.
+- **Fraud Prevention**: The smart contract ensures that only registered addresses can vote, and each can only vote once.
 
 ## Project Structure
 ```
@@ -95,3 +91,7 @@ This will open the application in your browser at `http://localhost:3000`.
 - **Dynamic Election Creation**: Allow admins to create new elections with different candidates directly from the UI.
 - **Multi-factor Verification**: Combine with other ID checks for stronger eligibility assurance.
 - **Mobile Integration**: Develop user-friendly mobile apps for broader accessibility.
+- **Broader ZKP Support**: Incorporate more advanced ZKP schemes for enhanced security.
+
+## Conclusion
+This prototype successfully demonstrates a foundational blockchain voting system. It provides a clear and functional base for building a fully-featured, secure, and private e-voting platform.
