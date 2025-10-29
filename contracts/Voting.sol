@@ -7,6 +7,7 @@ contract Voting {
     mapping(address => bool) public registeredVoters;
     mapping(address => bool) public hasVoted;
     mapping(string => uint256) public votesPerCandidate;
+    address[] public voters;
 
     event VoterRegistered(address indexed voter);
     event Voted(address indexed voter, string candidate);
@@ -24,10 +25,15 @@ contract Voting {
     function getCandidates() public view returns (string[] memory) {
         return candidates;
     }
+    
+    function getVoters() public view onlyOwner returns (address[] memory) {
+        return voters;
+    }
 
     function registerVoter(address _voterAddress) public onlyOwner {
         require(!registeredVoters[_voterAddress], "Voter is already registered.");
         registeredVoters[_voterAddress] = true;
+        voters.push(_voterAddress);
         emit VoterRegistered(_voterAddress);
     }
 
