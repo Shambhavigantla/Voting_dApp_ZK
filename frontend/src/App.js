@@ -9,7 +9,7 @@ import './App.css';
 
 // Navbar consumes context (must be inside provider)
 const NavBar = () => {
-  const { isAdmin } = useWeb3();
+  const { isAdmin, owner } = useWeb3();
   return (
     <header className="app-header">
       <Link to="/" className="logo">VoteChain</Link>
@@ -19,6 +19,9 @@ const NavBar = () => {
         <Link to="/vote">Voting Booth</Link>
         <Link to="/how-to-use">How to Use</Link>
       </nav>
+      <div style={{ marginLeft: 16, fontSize: 12, color: '#666' }}>
+        Owner: {owner ? owner : 'not loaded'}
+      </div>
     </header>
   );
 };

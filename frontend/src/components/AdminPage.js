@@ -1,126 +1,158 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWeb3 } from '../contexts/Web3Context';
 
+function parseList(input) {
+  return input.split(',').map(s => s.trim()).filter(Boolean);
+}
+
 function getRevertReason(error) {
-  var message = (error && error.message) ? error.message : '';
-  var m = message.match(/revert\s*([^"]*)/);
-  if (m && m[1]) return m[1].trim();
-  if (error && error.data && error.data.message) return error.data.message;
+  const message = error?.message || '';
+  const match = message.match(/revert\s*([^"]*)/);
+  if (match && match[1]) return match[1].trim();
+  if (error?.data?.message) return error.data.message;
   return 'An unknown error occurred.';
 }
 
 const AdminPage = () => {
-  const { account, contract, isAdmin } = useWeb3();
-  const [voterAddress, setVoterAddress] = useState('');
-  const [registeredVoters, setRegisteredVoters] = useState([]);
-  const [message, setMessage] = useState('');
+  const { account, isAdmin, contract } = useWeb3();
 
-  const fetchRegisteredVoters = useCallback(async () => {
+  // local state
+  const [electionName, setElectionName] = useState('');
+  const [candidatesCsv, setCandidatesCsv] = useState('');
+  const [elections, setElections] = useState([]); // { id, name }
+  const [selectedElection, setSelectedElection] = useState(null);
+  const [voterAddress, setVoterAddress] = useState('');
+  const [bulkVotersCsv, setBulkVotersCsv] = useState('');
+  const [message, setMessage] = useState('');
+  const [voterList, setVoterList] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+
+  const fetchElections = useCallback(async () => {
     if (!contract) return;
     try {
-      // try owner-only getter first
-      var voters = await contract.methods.getVoters().call({ from: account });
-      if (voters && voters.length) {
-        setRegisteredVoters(voters);
-        return;
+      const count = await contract.methods.getElectionCount().call();
+      const arr = [];
+      for (let i = 1; i <= parseInt(count); i++) {
+        const name = await contract.methods.getElectionName(i).call();
+        arr.push({ id: i, name });
       }
+      setElections(arr);
+      if (arr.length && !selectedElection) setSelectedElection(arr[0].id);
     } catch (e) {
-      // ignore - fall back to events if getter is not available or caller isn't owner
+      setElections([]);
     }
+  }, [contract, selectedElection]);
 
-    // fallback: try events (best-effort)
+  const fetchSelectedDetails = useCallback(async (id) => {
+    if (!contract || !id) return;
     try {
-      if (contract.getPastEvents) {
-        var events = await contract.getPastEvents('VoterRegistered', { fromBlock: 0, toBlock: 'latest' });
-        var unique = [];
-        events.forEach(function(ev) {
-          var v = ev.returnValues && (ev.returnValues.voter || ev.returnValues._voterAddress || ev.returnValues._voter);
-          if (v && unique.indexOf(v) === -1) unique.push(v);
-        });
-        setRegisteredVoters(unique);
-      } else {
-        setRegisteredVoters([]);
-      }
-    } catch (err) {
-      setRegisteredVoters([]);
+      const cand = await contract.methods.getCandidates(id).call();
+      setCandidates(cand || []);
+    } catch (e) {
+      setCandidates([]);
+    }
+    try {
+      const voters = await contract.methods.getVoters(id).call({ from: account });
+      setVoterList(voters || []);
+    } catch (e) {
+      setVoterList([]); // if not owner or no getter, clear or fallback
     }
   }, [contract, account]);
 
-  useEffect(function() {
-    fetchRegisteredVoters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchRegisteredVoters]);
+  useEffect(() => { fetchElections(); }, [fetchElections]);
 
-  const handleRegister = async () => {
-    if (!contract || !account) {
-      setMessage('Please connect your wallet first.');
-      return;
-    }
-    if (!voterAddress) {
-      setMessage('Enter a voter address.');
-      return;
-    }
+  useEffect(() => {
+    if (selectedElection) fetchSelectedDetails(selectedElection);
+  }, [selectedElection, fetchSelectedDetails]);
+
+  const handleCreateElection = async () => {
+    if (!contract || !isAdmin) { setMessage('Only admin can create elections.'); return; }
+    const names = parseList(candidatesCsv);
+    if (!electionName || names.length === 0) { setMessage('Provide election name and candidate list.'); return; }
     try {
-      setMessage('Sending transaction...');
-      await contract.methods.registerVoter(voterAddress).send({ from: account });
-      setMessage('Voter registered successfully.');
-      setVoterAddress('');
-      fetchRegisteredVoters();
-    } catch (error) {
-      var reason = getRevertReason(error);
-      setMessage('Error: ' + reason);
+      setMessage('Creating election...');
+      await contract.methods.createElection(electionName, names).send({ from: account });
+      setMessage('Election created.');
+      setElectionName('');
+      setCandidatesCsv('');
+      await fetchElections();
+    } catch (err) {
+      setMessage('Error: ' + getRevertReason(err));
     }
   };
 
-  if (!account) {
-    return (
-      <div className="page-container">
-        <div className="card">
-          <h3>Admin Dashboard</h3>
-          <p>Please connect your wallet to continue.</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRegisterVoter = async () => {
+    if (!contract || !isAdmin || !selectedElection) { setMessage('Select election and ensure you are admin.'); return; }
+    if (!voterAddress) { setMessage('Enter voter address.'); return; }
+    try {
+      setMessage('Registering voter...');
+      await contract.methods.registerVoterForElection(selectedElection, voterAddress).send({ from: account });
+      setMessage('Voter registered.');
+      setVoterAddress('');
+      await fetchSelectedDetails(selectedElection);
+    } catch (err) {
+      setMessage('Error: ' + getRevertReason(err));
+    }
+  };
 
-  if (!isAdmin) {
-    return (
-      <div className="page-container">
-        <div className="card">
-          <h3>Access Denied</h3>
-          <p>Your connected account (<strong>{account}</strong>) is not the admin/owner.</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRegisterBulk = async () => {
+    if (!contract || !isAdmin || !selectedElection) { setMessage('Select election and ensure you are admin.'); return; }
+    const list = parseList(bulkVotersCsv);
+    if (list.length === 0) { setMessage('Enter addresses separated by commas.'); return; }
+    try {
+      setMessage('Registering voters...');
+      await contract.methods.registerVotersForElection(selectedElection, list).send({ from: account });
+      setMessage('Bulk registration complete.');
+      setBulkVotersCsv('');
+      await fetchSelectedDetails(selectedElection);
+    } catch (err) {
+      setMessage('Error: ' + getRevertReason(err));
+    }
+  };
 
   return (
     <div className="page-container">
-      <h2>Admin Dashboard</h2>
-      <p>Connected as: <strong>{account || 'Not Connected'}</strong></p>
+      <h2>Admin — Manage Elections</h2>
+      {!account && <div className="card"><p>Please connect your wallet.</p></div>}
+      {account && !isAdmin && <div className="card"><p>Access denied: Connect as the admin account.</p></div>}
 
-      <div className="card">
-        <h3>Register a New Voter</h3>
-        <div className="form-group">
-          <input
-            type="text"
-            placeholder="Enter voter's wallet address"
-            value={voterAddress}
-            onChange={function(e){ setVoterAddress(e.target.value); }}
-          />
-          <button onClick={handleRegister}>Register Voter</button>
-        </div>
-        {message && <p className="message">{message}</p>}
-      </div>
+      {account && isAdmin && (
+        <>
+          <div className="card">
+            <h3>Create New Election</h3>
+            <input type="text" placeholder="Election name" value={electionName} onChange={e => setElectionName(e.target.value)} />
+            <input type="text" placeholder="Candidates (comma separated)" value={candidatesCsv} onChange={e => setCandidatesCsv(e.target.value)} />
+            <button onClick={handleCreateElection}>Create Election</button>
+          </div>
 
-      <div className="card">
-        <h3>Currently Registered Voters ({registeredVoters.length})</h3>
-        <ul className="voter-list">
-          {registeredVoters.length > 0 ? registeredVoters.map(function(voter, i) {
-            return <li key={voter + i}>{voter}</li>;
-          }) : <li>No voters registered yet.</li>}
-        </ul>
-      </div>
+          <div className="card">
+            <h3>Existing Elections</h3>
+            <select value={selectedElection || ''} onChange={e => setSelectedElection(parseInt(e.target.value))}>
+              {elections.map(ev => <option key={ev.id} value={ev.id}>{ev.id} — {ev.name}</option>)}
+              {elections.length === 0 && <option value=''>No elections</option>}
+            </select>
+            <div style={{ marginTop: 12 }}>
+              <h4>Candidates</h4>
+              <ul>{candidates.map((c, i) => <li key={i}>{i}: {c}</li>)}</ul>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <h4>Register Voters</h4>
+              <input type="text" placeholder="Single voter address" value={voterAddress} onChange={e => setVoterAddress(e.target.value)} />
+              <button onClick={handleRegisterVoter}>Register Voter</button>
+              <p style={{ marginTop: 8 }}>Or bulk (comma separated):</p>
+              <input type="text" placeholder="addr1, addr2, ..." value={bulkVotersCsv} onChange={e => setBulkVotersCsv(e.target.value)} />
+              <button onClick={handleRegisterBulk}>Register Bulk</button>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <h4>Registered Voters ({voterList.length})</h4>
+              <ul className="voter-list">{voterList.map((v, i) => <li key={v + i}>{v}</li>)}</ul>
+            </div>
+          </div>
+        </>
+      )}
+
+      {message && <div className="card"><p>{message}</p></div>}
     </div>
   );
 };

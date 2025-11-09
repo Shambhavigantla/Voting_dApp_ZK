@@ -1,37 +1,28 @@
 const hre = require("hardhat");
-const fs = require('fs');
+const fs = require("fs");
+const path = require("path");
 
 async function main() {
-  const candidateNames = ["Candidate A", "Candidate B", "Candidate C"];
-  const Voting = await hre.ethers.getContractFactory("Voting");
-  const voting = await Voting.deploy(candidateNames);
+  // pick signer by index (0 = first account, 1 = second, ...)
+  const signers = await hre.ethers.getSigners();
+  const deployer = signers[1]; // <-- change index to choose account
 
+  console.log("Deploying from:", deployer.address);
+
+  const VotingFactory = await hre.ethers.getContractFactory("Voting", deployer);
+  const voting = await VotingFactory.deploy(); // pass constructor args if needed
   await voting.deployed();
 
-  console.log("Voting contract deployed to:", voting.address);
+  console.log("Voting deployed to:", voting.address);
 
-  // Export the contract's address and ABI
-  const contractDir = __dirname + "/../frontend/src/artifacts/contracts";
-  if (!fs.existsSync(contractDir)) {
-    fs.mkdirSync(contractDir, { recursive: true });
-  }
+  const contractDir = path.join(__dirname, "..", "frontend", "src", "artifacts", "contracts");
+  if (!fs.existsSync(contractDir)) fs.mkdirSync(contractDir, { recursive: true });
 
-  fs.writeFileSync(
-    contractDir + "/contract-address.json",
-    JSON.stringify({ Voting: voting.address }, undefined, 2)
-  );
+  fs.writeFileSync(path.join(contractDir, "contract-address.json"), JSON.stringify({ Voting: voting.address }, null, 2));
+  const artifact = await hre.artifacts.readArtifact("Voting");
+  fs.writeFileSync(path.join(contractDir, "Voting.json"), JSON.stringify(artifact, null, 2));
 
-  const contractArtifact = hre.artifacts.readArtifactSync("Voting");
-
-  fs.writeFileSync(
-    contractDir + "/Voting.json",
-    JSON.stringify(contractArtifact, null, 2)
-  );
+  console.log("Frontend artifacts written to:", contractDir);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((e)=>{ console.error(e); process.exit(1); });
