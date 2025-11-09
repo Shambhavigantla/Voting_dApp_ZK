@@ -9,5 +9,8 @@
 <body>
     <div id="root"></div>
     <script src="bundle.js"></script>
+    <script>
+  fetch('/contract-address.json').then(r=>r.json()).then(j=>{ window.__CONTRACT_ADDRESS = j.Voting; });
+</script>
 </body>
 </html>
