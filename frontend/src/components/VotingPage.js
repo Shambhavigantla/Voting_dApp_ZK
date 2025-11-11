@@ -1,22 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useWeb3 } from '../contexts/Web3Context';
 
-function getRevertReason(error) {
-  const message = error?.message || '';
-  const match = message.match(/revert\s*([^"]*)/);
-  if (match && match[1]) return match[1].trim();
-  if (error?.data?.message) return error.data.message;
-  return 'An unknown error occurred.';
-}
-
 const VotingPage = () => {
-  const { account, contract } = useWeb3();
-  const [elections, setElections] = useState([]);
-  const [selectedElection, setSelectedElection] = useState(null);
+  const { account, contract, getRevertReason } = useWeb3();
   const [candidates, setCandidates] = useState([]);
   const [results, setResults] = useState({});
   const [totalVotes, setTotalVotes] = useState(0);
   const [message, setMessage] = useState('');
+  const [selectedElection, setSelectedElection] = useState(null);
+  const [elections, setElections] = useState([]);
   const [loadingIdx, setLoadingIdx] = useState(null);
 
   const fetchElections = useCallback(async () => {
@@ -31,6 +23,7 @@ const VotingPage = () => {
       setElections(arr);
       if (arr.length && !selectedElection) setSelectedElection(arr[0].id);
     } catch (e) {
+      console.error('Error fetching elections:', e);
       setElections([]);
     }
   }, [contract, selectedElection]);
@@ -51,34 +44,61 @@ const VotingPage = () => {
       setResults(data);
       setTotalVotes(total);
     } catch (err) {
+      console.error('Error fetching candidates:', err);
       setCandidates([]);
       setResults({});
       setTotalVotes(0);
     }
   }, [contract]);
 
-  useEffect(() => { fetchElections(); }, [fetchElections]);
+  useEffect(() => {
+    fetchElections();
+  }, [fetchElections]);
 
   useEffect(() => {
-    if (selectedElection) fetchCandidatesAndResults(selectedElection);
-    // poll updates:
-    const id = setInterval(() => {
-      if (selectedElection) fetchCandidatesAndResults(selectedElection);
-    }, 6000);
-    return () => clearInterval(id);
+    if (selectedElection) {
+      fetchCandidatesAndResults(selectedElection);
+      // Poll for updates every 6 seconds
+      const interval = setInterval(() => {
+        fetchCandidatesAndResults(selectedElection);
+      }, 6000);
+      return () => clearInterval(interval);
+    }
   }, [selectedElection, fetchCandidatesAndResults]);
 
   const handleVote = async (candidateIndex) => {
-    if (!contract || !account || !selectedElection) { setMessage('Connect wallet and select election.'); return; }
+    if (!contract || !account || !selectedElection) {
+      setMessage('Please connect your wallet and select an election');
+      return;
+    }
+
+    setLoadingIdx(candidateIndex);
+    setMessage('');
+
     try {
-      setLoadingIdx(candidateIndex);
-      setMessage('Submitting vote...');
-      await contract.methods.vote(selectedElection, candidateIndex).send({ from: account });
-      setMessage('Vote submitted.');
-      await fetchCandidatesAndResults(selectedElection);
-    } catch (err) {
-      setMessage('Error: ' + getRevertReason(err));
-    } finally {
+      // Estimate gas to catch errors early
+      await contract.methods
+        .vote(selectedElection, candidateIndex)
+        .estimateGas({ from: account });
+
+      // Send actual transaction
+      await contract.methods
+        .vote(selectedElection, candidateIndex)
+        .send({ from: account });
+
+      setMessage('✓ Vote cast successfully!');
+      setLoadingIdx(null);
+
+      // Refresh results after vote
+      setTimeout(() => {
+        fetchCandidatesAndResults(selectedElection);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Vote error:', error);
+      // Use getRevertReason to extract the actual error message
+      const errorMsg = getRevertReason(error);
+      setMessage('✗ ' + errorMsg);
       setLoadingIdx(null);
     }
   };
@@ -88,38 +108,65 @@ const VotingPage = () => {
       <h2>Voting Booth</h2>
       <p>Connected as: <strong>{account || 'Not Connected'}</strong></p>
 
+      {message && (
+        <div className={`message ${message.startsWith('✗') ? 'error' : 'success'}`}>
+          {message}
+        </div>
+      )}
+
       <div className="card">
-        <label>Select Election</label>
-        <select value={selectedElection || ''} onChange={e => setSelectedElection(parseInt(e.target.value))}>
-          {elections.map(ev => <option key={ev.id} value={ev.id}>{ev.id} — {ev.name}</option>)}
-          {elections.length === 0 && <option value=''>No elections available</option>}
+        <h3>Select Election</h3>
+        <select
+          value={selectedElection || ''}
+          onChange={(e) => setSelectedElection(parseInt(e.target.value))}
+        >
+          {elections.map((ev) => (
+            <option key={ev.id} value={ev.id}>
+              {ev.id} — {ev.name}
+            </option>
+          ))}
+          {elections.length === 0 && <option value="">No elections available</option>}
         </select>
       </div>
 
       <div className="card">
         <h3>Candidates</h3>
         <div className="card-container">
-          {candidates.length > 0 ? candidates.map((name, idx) => {
-            const cnt = results[idx] || 0;
-            const pct = totalVotes > 0 ? (cnt / totalVotes) * 100 : 0;
-            return (
-              <div key={idx} className="card candidate-card">
-                <h4>{name}</h4>
-                <button onClick={() => handleVote(idx)} disabled={loadingIdx !== null && loadingIdx !== idx}>
-                  {loadingIdx === idx ? 'Submitting...' : 'Vote for ' + name}
-                </button>
-                <div className="result-bar">
-                  <div className="result-info"><span>{name} ({cnt} votes)</span><span>{pct.toFixed(1)}%</span></div>
-                  <div className="progress-bar"><div className="progress" style={{ width: pct + '%' }}></div></div>
+          {candidates.length > 0 ? (
+            candidates.map((name, idx) => {
+              const cnt = results[idx] || 0;
+              const pct = totalVotes > 0 ? (cnt / totalVotes) * 100 : 0;
+              return (
+                <div key={idx} className="card candidate-card">
+                  <h4>{name}</h4>
+                  <button
+                    onClick={() => handleVote(idx)}
+                    disabled={loadingIdx !== null && loadingIdx !== idx}
+                  >
+                    {loadingIdx === idx ? 'Submitting...' : 'Vote for ' + name}
+                  </button>
+                  <div className="result-bar">
+                    <div className="result-info">
+                      <span>
+                        {name} ({cnt} votes)
+                      </span>
+                      <span>{pct.toFixed(1)}%</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div className="progress" style={{ width: pct + '%' }}></div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            );
-          }) : <p>No candidates (select an election).</p>}
+              );
+            })
+          ) : (
+            <p>No candidates (select an election).</p>
+          )}
         </div>
-        <div style={{ marginTop: 12 }}><strong>Total Votes: {totalVotes}</strong></div>
+        <div style={{ marginTop: 12 }}>
+          <strong>Total Votes: {totalVotes}</strong>
+        </div>
       </div>
-
-      {message && <div className="card"><p>{message}</p></div>}
     </div>
   );
 };

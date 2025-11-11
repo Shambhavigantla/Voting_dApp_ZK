@@ -2,6 +2,62 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import Web3 from 'web3';
 import VotingABI from '../artifacts/contracts/Voting.sol/Voting.json';
 
+// UPDATED: improved revert reason extractor
+const getRevertReason = (error) => {
+  if (!error) return 'Unknown error occurred';
+
+  // Common user-rejection code from MetaMask
+  if (error.code === 4001 || (error.message && error.message.toLowerCase().includes('user denied'))) {
+    return 'Transaction rejected by user';
+  }
+
+  // Check nested error.data.message first (common in web3.js errors)
+  if (error.data && error.data.message && typeof error.data.message === 'string') {
+    const nestedMsg = error.data.message;
+    // Extract the actual revert reason from the message
+    const match = nestedMsg.match(/reverted with reason string '([^']+)'/);
+    if (match && match[1]) return match[1];
+    // Also check for other formats
+    const match2 = nestedMsg.match(/reverted: "?([^"]+)"?/);
+    if (match2 && match2[1]) return match2[1];
+    return nestedMsg;
+  }
+
+  // Try to extract hex revert data
+  try {
+    let dataHex = null;
+    if (error.data && typeof error.data === 'string') dataHex = error.data;
+    else if (error.data && error.data.data && typeof error.data.data === 'string') dataHex = error.data.data;
+    else if (error.error && error.error.data && typeof error.error.data === 'string') dataHex = error.error.data;
+
+    if (dataHex && typeof dataHex === 'string' && dataHex.startsWith('0x') && dataHex.length > 138) {
+      const reasonHex = '0x' + dataHex.slice(138);
+      const reason = Web3.utils.hexToAscii(reasonHex).replace(/\u0000/g, '');
+      if (reason) return reason;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // Fallback: parse message text patterns
+  const msg = (error && error.message) ? error.message : '';
+  const patterns = [
+    /reverted with reason string '([^']+)'/i,
+    /execution reverted: "?(.*?)"?(\n|$)/i,
+    /execution reverted: (.*?)$/i,
+    /reason string "([^"]+)"/i,
+    /revert (.*?)$/i
+  ];
+  for (const p of patterns) {
+    const m = msg.match(p);
+    if (m && m[1]) return m[1].trim();
+  }
+
+  // Fallback
+  if (msg) return msg;
+  return 'Unknown error occurred';
+};
+
 export const Web3Context = createContext();
 
 export const Web3Provider = ({ children }) => {
@@ -89,7 +145,7 @@ export const Web3Provider = ({ children }) => {
   }, [account, owner]);
 
   return (
-    <Web3Context.Provider value={{ web3, account, contract, owner, isAdmin }}>
+    <Web3Context.Provider value={{ web3, account, contract, owner, isAdmin, getRevertReason }}>
       {children}
     </Web3Context.Provider>
   );
