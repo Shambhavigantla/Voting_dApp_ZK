@@ -10,11 +10,16 @@ function getRevertReason(error) {
   const match = message.match(/revert\s*([^"]*)/);
   if (match && match[1]) return match[1].trim();
   if (error?.data?.message) return error.data.message;
+  // fallback: try nested structures
+  if (error?.data && typeof error.data === 'string') {
+    const m = error.data.match(/reverted with reason string '([^']+)'/);
+    if (m && m[1]) return m[1];
+  }
   return 'An unknown error occurred.';
 }
 
 const AdminPage = () => {
-  const { account, isAdmin, contract } = useWeb3();
+  const { account, isAdmin, contract, owner } = useWeb3();
 
   // local state
   const [electionName, setElectionName] = useState('');
@@ -23,7 +28,7 @@ const AdminPage = () => {
   const [selectedElection, setSelectedElection] = useState(null);
   const [voterAddress, setVoterAddress] = useState('');
   const [bulkVotersCsv, setBulkVotersCsv] = useState('');
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(null); // { type: 'error'|'success', text: string }
   const [voterList, setVoterList] = useState([]);
   const [candidates, setCandidates] = useState([]);
 
@@ -65,67 +70,86 @@ const AdminPage = () => {
     if (selectedElection) fetchSelectedDetails(selectedElection);
   }, [selectedElection, fetchSelectedDetails]);
 
+  const showError = (text) => setMessage({ type: 'error', text });
+  const showSuccess = (text) => setMessage({ type: 'success', text });
+
   const handleCreateElection = async () => {
-    if (!contract || !isAdmin) { setMessage('Only admin can create elections.'); return; }
+    if (!contract || !isAdmin) { showError('Only admin can create elections.'); return; }
     const names = parseList(candidatesCsv);
-    if (!electionName || names.length === 0) { setMessage('Provide election name and candidate list.'); return; }
+    if (!electionName || names.length === 0) { showError('Provide election name and candidate list.'); return; }
     try {
-      setMessage('Creating election...');
+      showSuccess('Creating election...');
       await contract.methods.createElection(electionName, names).send({ from: account });
-      setMessage('Election created.');
+      showSuccess('Election created.');
       setElectionName('');
       setCandidatesCsv('');
       await fetchElections();
     } catch (err) {
-      setMessage('Error: ' + getRevertReason(err));
+      showError(getRevertReason(err));
     }
   };
 
   const handleRegisterVoter = async () => {
-    if (!contract || !isAdmin || !selectedElection) { setMessage('Select election and ensure you are admin.'); return; }
-    if (!voterAddress) { setMessage('Enter voter address.'); return; }
+    if (!contract || !isAdmin || !selectedElection) { showError('Select election and ensure you are admin.'); return; }
+    if (!voterAddress) { showError('Enter voter address.'); return; }
     try {
-      setMessage('Registering voter...');
+      showSuccess('Registering voter...');
       await contract.methods.registerVoterForElection(selectedElection, voterAddress).send({ from: account });
-      setMessage('Voter registered.');
+      showSuccess('Voter registered.');
       setVoterAddress('');
       await fetchSelectedDetails(selectedElection);
     } catch (err) {
-      setMessage('Error: ' + getRevertReason(err));
+      showError(getRevertReason(err));
     }
   };
 
   const handleRegisterBulk = async () => {
-    if (!contract || !isAdmin || !selectedElection) { setMessage('Select election and ensure you are admin.'); return; }
+    if (!contract || !isAdmin || !selectedElection) { showError('Select election and ensure you are admin.'); return; }
     const list = parseList(bulkVotersCsv);
-    if (list.length === 0) { setMessage('Enter addresses separated by commas.'); return; }
+    if (list.length === 0) { showError('Enter addresses separated by commas.'); return; }
     try {
-      setMessage('Registering voters...');
+      showSuccess('Registering voters...');
       await contract.methods.registerVotersForElection(selectedElection, list).send({ from: account });
-      setMessage('Bulk registration complete.');
+      showSuccess('Bulk registration complete.');
       setBulkVotersCsv('');
       await fetchSelectedDetails(selectedElection);
     } catch (err) {
-      setMessage('Error: ' + getRevertReason(err));
+      showError(getRevertReason(err));
     }
   };
 
   return (
     <div className="page-container">
       <h2>Admin — Manage Elections</h2>
-      {!account && <div className="card"><p>Please connect your wallet.</p></div>}
-      {account && !isAdmin && <div className="card"><p>Access denied: Connect as the admin account.</p></div>}
+
+      {!account && (
+        <div className="card" style={{ padding: 16 }}>
+          <p>Please connect your wallet.</p>
+        </div>
+      )}
+
+      {account && !isAdmin && (
+        <div className="card" style={{ borderLeft: '4px solid #dc2626', backgroundColor: '#fff5f5', color: '#7f1d1d', padding: 16 }}>
+          <h3 style={{ margin: 0 }}>Access Denied</h3>
+          <p style={{ margin: '8px 0 0' }}>
+            Connect with the admin account to access this page.
+          </p>
+          <p style={{ margin: '8px 0 0', fontSize: 12 }}>
+            Contract owner: <strong style={{ color: '#7f1d1d' }}>{owner || 'not loaded'}</strong>
+          </p>
+        </div>
+      )}
 
       {account && isAdmin && (
         <>
-          <div className="card">
+          <div className="card" style={{ padding: 16 }}>
             <h3>Create New Election</h3>
             <input type="text" placeholder="Election name" value={electionName} onChange={e => setElectionName(e.target.value)} />
             <input type="text" placeholder="Candidates (comma separated)" value={candidatesCsv} onChange={e => setCandidatesCsv(e.target.value)} />
             <button onClick={handleCreateElection}>Create Election</button>
           </div>
 
-          <div className="card">
+          <div className="card" style={{ padding: 16 }}>
             <h3>Existing Elections</h3>
             <select value={selectedElection || ''} onChange={e => setSelectedElection(parseInt(e.target.value))}>
               {elections.map(ev => <option key={ev.id} value={ev.id}>{ev.id} — {ev.name}</option>)}
@@ -152,7 +176,20 @@ const AdminPage = () => {
         </>
       )}
 
-      {message && <div className="card"><p>{message}</p></div>}
+      {message && (
+        <div
+          className="card"
+          style={{
+            marginTop: 12,
+            padding: 12,
+            borderLeft: message.type === 'error' ? '4px solid #dc2626' : '4px solid #16a34a',
+            backgroundColor: message.type === 'error' ? '#fff5f5' : '#f0fff4',
+            color: message.type === 'error' ? '#7f1d1d' : '#065f46'
+          }}
+        >
+          <p style={{ margin: 0 }}>{message.text}</p>
+        </div>
+      )}
     </div>
   );
 };
