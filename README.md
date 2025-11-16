@@ -1,6 +1,6 @@
 # Blockchain Voting Application - Prototype
 
-YOUTUBE DEMO LINK - https://youtu.be/GU4NWJ1Hka4?si=BHJE6qMtGsFBV4CB
+YOUTUBE DEMO LINK - https://www.youtube.com/watch?v=HXx2rIYDkp4&lc=UgyD4ZPx2vLRnyr8mv54AaABAg
 
 ## Overview
 VoteChain is a secure, transparent, and user-friendly electronic voting platform built on the Ethereum blockchain. Designed for college and community elections (e.g., class representatives, club leadership), it provides a trustworthy alternative to traditional polling methods.
