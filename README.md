@@ -79,6 +79,7 @@ npm start
 ```
 This will open the application in your browser at `http://localhost:3000`.
 
+
 ### 5. Configure MetaMask
 1.  Open MetaMask and add a new network with these details:
     - **Network Name**: `Hardhat`
