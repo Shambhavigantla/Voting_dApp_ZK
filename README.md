@@ -1,4 +1,4 @@
-# Blockchain Voting Application - Prototype
+# Blockchain based Voting Application - Prototype
 
 YOUTUBE DEMO LINK - https://www.youtube.com/watch?v=HXx2rIYDkp4&lc=UgyD4ZPx2vLRnyr8mv54AaABAg
 
